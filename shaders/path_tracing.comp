@@ -1,0 +1,59 @@
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(set = 0, binding = 0, rgba8) uniform image2D color_buffer;
+
+// scene descriptor
+
+layout(set = 1, binding = 0) uniform Positions {
+    vec3 positions[];
+};
+
+layout(set = 1, binding = 1) uniform Normals {
+    vec3 normals[];
+};
+
+layout(set = 1, binding = 2) uniform Tangents {
+    vec4 tangents[];
+};
+
+layout(set = 1, binding = 3) uniform Tex_Coords {
+    vec2 tex_coords[];
+};
+
+layout(set = 1, binding = 4) uniform Indices {
+    uint indices[3][];
+}
+
+// layout(set = 2, binding = 0) uniform sampler2D materials[MAX_NR_PRIMITIVES];
+
+struct Ray {
+    vec3 origin;  
+    vec3 direction;
+};
+
+struct Hit_Payload {
+    vec3 position; 
+    vec3 normal;
+    vec4 tangent;
+    vec2 tex_coords;
+};
+
+Hit_Payload intersect();
+
+void main() {
+    const ivec2 screen_pos = ivec2(gl_GlobalInvocationID.xy);
+	const ivec2 screen_size = imageSize(color_buffer);
+
+	const float horizontal_coefficient = (float(screen_pos.x) / float(screen_size.x)) * 2.0 - 1.0;
+	float vertical_coefficient = (float(screen_pos.y) / float(screen_size.y)) * 2.0 - 1.0;
+	
+	vertical_coefficient *= (float(screen_size.y) / float(screen_size.x));
+
+	vec3 output_color = vec3(horizontal_coefficient, vertical_coefficient, 0.0);
+	imageStore(color_buffer, screen_pos, vec4(output_color, 1.0));
+}
+
+Hit_Payload intersect() {
+    
+}
