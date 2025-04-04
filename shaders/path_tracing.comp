@@ -22,7 +22,7 @@ layout(set = 1, binding = 3) uniform Tex_Coords {
 };
 
 layout(set = 1, binding = 4) uniform Indices {
-    uint indices[3][];
+    uvec3 indices[];
 }
 
 // layout(set = 2, binding = 0) uniform sampler2D materials[MAX_NR_PRIMITIVES];
@@ -32,6 +32,12 @@ struct Ray {
     vec3 direction;
 };
 
+struct Intersection {
+    float u;
+    float v;
+    float distance;  
+};
+
 struct Hit_Payload {
     vec3 position; 
     vec3 normal;
@@ -39,7 +45,8 @@ struct Hit_Payload {
     vec2 tex_coords;
 };
 
-Hit_Payload intersect();
+vec3 intersect();
+Hit_Payload trace_ray();
 
 void main() {
     const ivec2 screen_pos = ivec2(gl_GlobalInvocationID.xy);
@@ -54,6 +61,81 @@ void main() {
 	imageStore(color_buffer, screen_pos, vec4(output_color, 1.0));
 }
 
-Hit_Payload intersect() {
+float MAX_DISTANCE = 1000000;
+
+vec3 triangle_intersect(Ray ray, uvec3 indices) {
+    /*
+       v0  <- a   v1
+        +---------+
+         \       /
+     b |  \     /
+       v   \   /
+             +
+            v2
+    */
+
+    vec3 v0 = positions[indices[0]]:
+    vec3 v1 = positions[indices[1]]:
+    vec3 v2 = positions[indices[2]]:
+
+    vec3 a = v0 - v1;
+    vec3 b = v2 - v0;
+
+    vec3 normal = cross(b, a);
+    float determinant = dot(ray.direction, normal);
+
+    // ray is parallel to the triangle plane,
+    // they will never intersect
+    if (abs(determinant) < 1e-6) {
+        return Intersection(0, 0, MAX_DISTANCE);
+    }
+
+    /*
+    Describing a point on the triangle using barycentric coordinates:
+    P = v0 + u * a + v * b
+
+    find the intersection:
+    ray.origin + ray.direction * t = v0 + u * a + v * b
+
+    solve using cramer's rule
+    */
+
+    vec3 p = v0 - ray.origin;
+    vec3 q = cross(p, ray.direction);
+
+    float u = dot(q, b) / determinant;
+    float v = dot(q, a) / determinant;
+
+    if (u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0) {
+        return Intersection(0, 0, MAX_DISTANCE);
+    }
     
+    float t = dot(normal, p) / determinant;
+
+    return Intersection(u, v, t);
+}
+
+vec3 intersect(Ray ray) {
+    vec3 closest_intersection = vec3(0, 0, -1);
+    float closest_distance = MAX_DISTANCE;
+
+    for (uint i = 0; i < indices.length(); i++) {
+        uvec3 indices = indices[i];
+
+        vec3 intersection = triangle_intersect(ray, indices);
+        float distance = intersection.z;
+        
+        if (distance < closest_distance) {
+            closest_intersection = intersection;
+            closest_distance = distance;
+        }
+    }
+
+    return closest_intersection;
+}
+
+Hit_Payload trace_ray(Ray ray) {
+    vec3 intersection = intersect(ray);
+
+    if (intersection.z ==)
 }
