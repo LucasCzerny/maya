@@ -207,20 +207,26 @@ add_primitive :: proc(
 		indices[:nr_indices_loaded^],
 	}
 
-	src_buffers := [5]rawptr{}
+	src_buffers := [5]svk.Buffer {
+		primitive.vertex_buffers[.position],
+		primitive.vertex_buffers[.normal],
+		primitive.vertex_buffers[.tangent],
+		primitive.vertex_buffers[.tex_coord],
+		primitive.index_buffer,
+	}
 
 	nr_new_vertices: u32
 
-	for attribute, i in attributes {
-		buffer := &primitive.vertex_buffers[attribute]
+	for i in 0 ..< 5 {
+		buffer := src_buffers[i]
 		nr_new_vertices = buffer.count
 
-		svk.map_buffer(ctx, buffer)
+		svk.map_buffer(ctx, &buffer)
 
 		new_data := slice.from_ptr(cast(^f32)buffer.mapped_memory, cast(int)buffer.count)
 		copy_slice(target_slices[i], new_data)
 
-		svk.unmap_buffer(ctx, buffer)
+		svk.unmap_buffer(ctx, &buffer)
 	}
 
 	nr_vertices_loaded^ = cast(int)nr_new_vertices
