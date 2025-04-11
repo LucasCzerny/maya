@@ -99,6 +99,18 @@ create_render_data :: proc(ctx: svk.Context) -> Render_Data {
 		log.panicf("Failed to load the boom box (err: %v)", err)
 	}
 
+	// TODO: remove
+
+	buffer := &boom_box.meshes[0].primitives[0].vertex_buffers[.position]
+	svk.map_buffer(ctx, buffer)
+	sus_data := cast([^]f32)buffer.mapped_memory
+
+	for i in 0 ..< buffer.count / 3 {
+		sus_data[i] *= 100
+	}
+
+	svk.unmap_buffer(ctx, buffer)
+
 	data.models[0] = boom_box
 	data.primitive_list = create_primitive_list(ctx, data.models)
 

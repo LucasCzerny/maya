@@ -188,8 +188,6 @@ load_mesh :: proc(
 	mesh.primitives = make([]Primitive, len(src_mesh.primitives))
 
 	for src_primitive, i in src_mesh.primitives {
-		nr_vertices, nr_indices: u32
-
 		primitive := &mesh.primitives[i]
 		primitive^ = load_primitive(ctx, model, data, src_primitive)
 
@@ -578,7 +576,7 @@ load_scene :: proc(model: ^Model, data: ^cgltf.data, src_scene: cgltf.scene) -> 
 	}
 
 	scene.nr_vertices = options.nr_vertices_scene
-	scene.nr_indiecs = options.nr_indices_scene
+	scene.nr_indices = options.nr_indices_scene
 
 	return scene
 }

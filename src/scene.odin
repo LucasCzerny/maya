@@ -15,10 +15,10 @@ Primitive_List :: struct {
 }
 
 create_scene_descriptor :: proc(ctx: svk.Context) -> svk.Descriptor_Set {
-	bindings: [4]vk.DescriptorSetLayoutBinding
+	bindings: [5]vk.DescriptorSetLayoutBinding
 
 	// positions, normals, tangents, tex_coords
-	for i in 0 ..< 4 {
+	for i in 0 ..< 5 {
 		bindings[i] = vk.DescriptorSetLayoutBinding {
 			binding         = cast(u32)i,
 			descriptorType  = .STORAGE_BUFFER,
@@ -35,28 +35,36 @@ update_scene_descriptor :: proc(
 	scene_descriptor: svk.Descriptor_Set,
 	primitive_list: Primitive_List,
 ) {
-	handles := [4]vk.Buffer {
+	handles := [5]vk.Buffer {
 		primitive_list.positions.handle,
 		primitive_list.normals.handle,
 		primitive_list.tangents.handle,
 		primitive_list.tex_coords.handle,
+		primitive_list.indices.handle,
 	}
 
-	sizes := [4]vk.DeviceSize {
+	sizes := [5]vk.DeviceSize {
 		primitive_list.positions.size,
 		primitive_list.normals.size,
 		primitive_list.tangents.size,
 		primitive_list.tex_coords.size,
+		primitive_list.indices.size,
 	}
 
-	for i in 0 ..< 4 {
+	for i in 0 ..< 5 {
 		buffer_info := vk.DescriptorBufferInfo {
 			buffer = handles[i],
 			offset = 0,
 			range  = sizes[i],
 		}
 
-		svk.update_descriptor_set_buffer(ctx, scene_descriptor, buffer_info, 0, .STORAGE_BUFFER)
+		svk.update_descriptor_set_buffer(
+			ctx,
+			scene_descriptor,
+			buffer_info,
+			cast(u32)i,
+			.STORAGE_BUFFER,
+		)
 	}
 }
 
@@ -204,7 +212,8 @@ add_primitive :: proc(
 		normals[:nr_vertices_loaded^],
 		tangents[:nr_vertices_loaded^],
 		tex_coords[:nr_vertices_loaded^],
-		indices[:nr_indices_loaded^],
+		// kind of skuffed but u32 and f32 have the same width so why not
+		transmute([]f32)indices[:nr_indices_loaded^],
 	}
 
 	src_buffers := [5]svk.Buffer {

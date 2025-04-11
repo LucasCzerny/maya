@@ -5,25 +5,25 @@ layout(set = 0, binding = 0, rgba8) uniform image2D color_buffer;
 
 // scene descriptor
 
-layout(set = 1, binding = 0) uniform Positions {
+layout(set = 1, binding = 0) readonly buffer Positions {
     vec3 positions[];
 };
 
-layout(set = 1, binding = 1) uniform Normals {
+layout(set = 1, binding = 1) readonly buffer Normals {
     vec3 normals[];
 };
 
-layout(set = 1, binding = 2) uniform Tangents {
+layout(set = 1, binding = 2) readonly buffer Tangents {
     vec4 tangents[];
 };
 
-layout(set = 1, binding = 3) uniform Tex_Coords {
+layout(set = 1, binding = 3) readonly buffer Tex_Coords {
     vec2 tex_coords[];
 };
 
-layout(set = 1, binding = 4) uniform Indices {
+layout(set = 1, binding = 4) readonly buffer Indices {
     uvec3 indices[];
-}
+};
 
 // layout(set = 2, binding = 0) uniform sampler2D materials[MAX_NR_PRIMITIVES];
 
@@ -33,20 +33,28 @@ struct Ray {
 };
 
 struct Intersection {
-    float u;
-    float v;
-    float distance;  
+    vec2 coords;
+    float distance;
+};
+
+struct Intersection_Result {
+    Intersection intersection;
+    uvec3 indices;
 };
 
 struct Hit_Payload {
+    float distance;
     vec3 position; 
     vec3 normal;
     vec4 tangent;
     vec2 tex_coords;
+    vec3 albedo;
 };
 
-vec3 intersect();
-Hit_Payload trace_ray();
+float MAX_DISTANCE = 1000000;
+
+Intersection_Result intersect(Ray ray);
+Hit_Payload trace_ray(Ray ray);
 
 void main() {
     const ivec2 screen_pos = ivec2(gl_GlobalInvocationID.xy);
@@ -54,88 +62,230 @@ void main() {
 
 	const float horizontal_coefficient = (float(screen_pos.x) / float(screen_size.x)) * 2.0 - 1.0;
 	float vertical_coefficient = (float(screen_pos.y) / float(screen_size.y)) * 2.0 - 1.0;
-	
 	vertical_coefficient *= (float(screen_size.y) / float(screen_size.x));
 
-	vec3 output_color = vec3(horizontal_coefficient, vertical_coefficient, 0.0);
-	imageStore(color_buffer, screen_pos, vec4(output_color, 1.0));
+	Ray ray;
+	ray.origin = vec3(0.0, 0.0, -1.0);
+	ray.direction = normalize(vec3(horizontal_coefficient, vertical_coefficient, 1.0));
+
+   	vec3 output_color = vec3(horizontal_coefficient, vertical_coefficient, 0.0);
+
+	for (int i = 0; i < 1; i++) {
+	    Hit_Payload payload = trace_ray(ray);
+    	imageStore(color_buffer, screen_pos, vec4(payload.albedo, 1.0));
+	}
 }
 
-float MAX_DISTANCE = 1000000;
+/*
+    Intersection_Result intersect()
+*/
 
-vec3 triangle_intersect(Ray ray, uvec3 indices) {
-    /*
-       v0  <- a   v1
-        +---------+
-         \       /
-     b |  \     /
-       v   \   /
-             +
-            v2
-    */
+Intersection triangle_intersect(Ray ray, uvec3 indices);
 
-    vec3 v0 = positions[indices[0]]:
-    vec3 v1 = positions[indices[1]]:
-    vec3 v2 = positions[indices[2]]:
+Intersection_Result intersect(Ray ray) {
+    Intersection closest_intersection;
+    closest_intersection.distance = MAX_DISTANCE;
 
-    vec3 a = v0 - v1;
-    vec3 b = v2 - v0;
-
-    vec3 normal = cross(b, a);
-    float determinant = dot(ray.direction, normal);
-
-    // ray is parallel to the triangle plane,
-    // they will never intersect
-    if (abs(determinant) < 1e-6) {
-        return Intersection(0, 0, MAX_DISTANCE);
-    }
-
-    /*
-    Describing a point on the triangle using barycentric coordinates:
-    P = v0 + u * a + v * b
-
-    find the intersection:
-    ray.origin + ray.direction * t = v0 + u * a + v * b
-
-    solve using cramer's rule
-    */
-
-    vec3 p = v0 - ray.origin;
-    vec3 q = cross(p, ray.direction);
-
-    float u = dot(q, b) / determinant;
-    float v = dot(q, a) / determinant;
-
-    if (u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0) {
-        return Intersection(0, 0, MAX_DISTANCE);
-    }
-    
-    float t = dot(normal, p) / determinant;
-
-    return Intersection(u, v, t);
-}
-
-vec3 intersect(Ray ray) {
-    vec3 closest_intersection = vec3(0, 0, -1);
-    float closest_distance = MAX_DISTANCE;
+    uvec3 closest_indices;
 
     for (uint i = 0; i < indices.length(); i++) {
         uvec3 indices = indices[i];
 
-        vec3 intersection = triangle_intersect(ray, indices);
-        float distance = intersection.z;
+        Intersection intersection = triangle_intersect(ray, indices);
         
-        if (distance < closest_distance) {
+        if (intersection.distance < closest_intersection.distance) {
             closest_intersection = intersection;
-            closest_distance = distance;
+            closest_indices = indices;
         }
     }
 
-    return closest_intersection;
+    Intersection_Result result;
+    result.intersection = closest_intersection;
+    result.indices = closest_indices;
+
+    return result;
 }
+
+// Intersection triangle_intersect(Ray ray, uvec3 indices) {
+//     Intersection intersection;
+    
+//     /*
+//        v0  <- a   v1
+//         +---------+
+//          \       /
+//      b |  \     /
+//        v   \   /
+//              +
+//             v2
+//     */
+
+//     vec3 v0 = positions[indices[0]];
+//     vec3 v1 = positions[indices[1]];
+//     vec3 v2 = positions[indices[2]];
+
+//     vec3 a = v0 - v1;
+//     vec3 b = v2 - v0;
+
+//     vec3 normal = cross(b, a);
+//     float determinant = dot(ray.direction, normal);
+
+//     // ray is parallel to the triangle plane,
+//     // they will never intersect
+//     if (abs(determinant) < 1e-6) {
+//         intersection.distance = MAX_DISTANCE;
+//         return intersection;
+//     }
+
+//     /*
+//         Describing a point on the triangle using barycentric coordinates:
+//         P = v0 + u * a + v * b
+
+//         find the intersection:
+//         ray.origin + ray.direction * t = v0 + u * a + v * b
+
+//         solve using cramer's rule
+//     */
+
+//     vec3 p = v0 - ray.origin;
+//     vec3 q = cross(p, ray.direction);
+
+//     float u = dot(q, b) / determinant;
+//     float v = dot(q, a) / determinant;
+
+//     // the ray intersects the triangle plane,
+//     // but it doesn't hit the triangle itself
+//     if (u < 0.0 || v < 0.0 || (u + v) > 1.0) {
+//         intersection.distance = MAX_DISTANCE;
+//         return intersection;
+//     }
+    
+//     intersection.coords = vec2(u, v);
+//     intersection.distance = dot(normal, p) / determinant;
+
+//     return intersection;
+// }
+
+Intersection triangle_intersect(Ray ray, uvec3 indices) {
+    Intersection intersection;
+    intersection.distance = MAX_DISTANCE;
+
+    vec3 v0 = positions[indices.x];
+    vec3 v1 = positions[indices.y];
+    vec3 v2 = positions[indices.z];
+
+    vec3 edge1 = v1 - v0;
+    vec3 edge2 = v2 - v0;
+    vec3 h = cross(ray.direction, edge2);
+    float a = dot(edge1, h);
+
+    if (abs(a) < 1e-6) {
+        return intersection; // Parallel ray
+    }
+
+    float f = 1.0 / a;
+    vec3 s = ray.origin - v0;
+    float u = f * dot(s, h);
+
+    if (u < 0.0 || u > 1.0) {
+        return intersection;
+    }
+
+    vec3 q = cross(s, edge1);
+    float v = f * dot(ray.direction, q);
+
+    if (v < 0.0 || (u + v) > 1.0) {
+        return intersection;
+    }
+
+    float t = f * dot(edge2, q);
+
+    if (t > 1e-6 && t < MAX_DISTANCE) {
+        intersection.coords = vec2(u, v);
+        intersection.distance = t;
+    }
+
+    return intersection;
+}
+
+/*
+    Hit_Payload trace_ray(Ray ray)
+*/
+
+Hit_Payload Miss();
+Hit_Payload ClosestHit(Intersection intersection, uvec3 indices);
+
+vec3 mix_position(uvec3 indices, vec2 coords);
+vec3 mix_normal(uvec3 indices, vec2 coords);
+vec4 mix_tangent(uvec3 indices, vec2 coords);
+vec2 mix_tex_coords(uvec3 indices, vec2 coords);
 
 Hit_Payload trace_ray(Ray ray) {
-    vec3 intersection = intersect(ray);
+    Intersection_Result result = intersect(ray);
+    Intersection intersection = result.intersection;
 
-    if (intersection.z ==)
+    if (intersection.distance == MAX_DISTANCE) {
+        return Miss();
+    }
+
+    uvec3 indices = result.indices;
+    
+    return ClosestHit(intersection, indices);
 }
+
+Hit_Payload Miss() {
+    Hit_Payload payload;
+    payload.distance = MAX_DISTANCE;
+    payload.albedo = vec3(0.05, 0.2, 0.8);
+
+    return payload;
+}
+
+Hit_Payload ClosestHit(Intersection intersection, uvec3 indices) {
+    Hit_Payload payload;
+
+    payload.distance = intersection.distance;
+
+    payload.position = mix_position(indices, intersection.coords);
+    payload.normal = mix_normal(indices, intersection.coords);
+    payload.tangent = mix_tangent(indices, intersection.coords);
+    payload.tex_coords = mix_tex_coords(indices, intersection.coords);
+
+    // payload.normal = normal_mapping();
+
+    payload.albedo = vec3(1.0, 0.0, 0.0);
+
+    return payload;
+}
+
+vec3 mix_position(uvec3 indices, vec2 coords) {
+    float u = coords.x;
+    float v = coords.y;
+    float w = 1.0 - u - v;
+
+    return w * positions[indices[0]] + u * positions[indices[1]] + v * positions[indices[2]];
+}
+
+vec3 mix_normal(uvec3 indices, vec2 coords) {
+    vec3 v0 = normals[indices[0]];
+    vec3 v1 = normals[indices[1]];
+    vec3 v2 = normals[indices[2]];
+
+    return mix(v0, v1, coords[0]) + mix(v0, v2, coords[1]);
+}
+
+vec4 mix_tangent(uvec3 indices, vec2 coords) {
+    vec4 v0 = tangents[indices[0]];
+    vec4 v1 = tangents[indices[1]];
+    vec4 v2 = tangents[indices[2]];
+
+    return mix(v0, v1, coords[0]) + mix(v0, v2, coords[1]);
+}
+
+vec2 mix_tex_coords(uvec3 indices, vec2 coords) {
+    vec2 v0 = tex_coords[indices[0]];
+    vec2 v1 = tex_coords[indices[1]];
+    vec2 v2 = tex_coords[indices[2]];
+
+    return mix(v0, v1, coords[0]) + mix(v0, v2, coords[1]);
+}
+
