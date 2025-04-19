@@ -110,7 +110,12 @@ destroy_buffer :: proc(ctx: Context, buffer: Buffer) {
 	vk.FreeMemory(ctx.device, buffer.memory, nil)
 }
 
-map_buffer :: proc(ctx: Context, buffer: ^Buffer, offset: vk.DeviceSize = 0) {
+map_buffer :: proc(
+	ctx: Context,
+	buffer: ^Buffer,
+	offset: vk.DeviceSize = 0,
+	loc := #caller_location,
+) {
 	result := vk.MapMemory(
 		ctx.device,
 		buffer.memory,
@@ -120,7 +125,7 @@ map_buffer :: proc(ctx: Context, buffer: ^Buffer, offset: vk.DeviceSize = 0) {
 		&buffer.mapped_memory,
 	)
 	if result != .SUCCESS {
-		log.panicf("Failed to map a buffer (result: %v)", result)
+		log.panicf("Failed to map a buffer (result: %v)", result, location = loc)
 	}
 
 	buffer.mapped = true

@@ -106,103 +106,61 @@ Intersection_Result intersect(Ray ray) {
     return result;
 }
 
-// Intersection triangle_intersect(Ray ray, uvec3 indices) {
-//     Intersection intersection;
-    
-//     /*
-//        v0  <- a   v1
-//         +---------+
-//          \       /
-//      b |  \     /
-//        v   \   /
-//              +
-//             v2
-//     */
-
-//     vec3 v0 = positions[indices[0]];
-//     vec3 v1 = positions[indices[1]];
-//     vec3 v2 = positions[indices[2]];
-
-//     vec3 a = v0 - v1;
-//     vec3 b = v2 - v0;
-
-//     vec3 normal = cross(b, a);
-//     float determinant = dot(ray.direction, normal);
-
-//     // ray is parallel to the triangle plane,
-//     // they will never intersect
-//     if (abs(determinant) < 1e-6) {
-//         intersection.distance = MAX_DISTANCE;
-//         return intersection;
-//     }
-
-//     /*
-//         Describing a point on the triangle using barycentric coordinates:
-//         P = v0 + u * a + v * b
-
-//         find the intersection:
-//         ray.origin + ray.direction * t = v0 + u * a + v * b
-
-//         solve using cramer's rule
-//     */
-
-//     vec3 p = v0 - ray.origin;
-//     vec3 q = cross(p, ray.direction);
-
-//     float u = dot(q, b) / determinant;
-//     float v = dot(q, a) / determinant;
-
-//     // the ray intersects the triangle plane,
-//     // but it doesn't hit the triangle itself
-//     if (u < 0.0 || v < 0.0 || (u + v) > 1.0) {
-//         intersection.distance = MAX_DISTANCE;
-//         return intersection;
-//     }
-    
-//     intersection.coords = vec2(u, v);
-//     intersection.distance = dot(normal, p) / determinant;
-
-//     return intersection;
-// }
-
 Intersection triangle_intersect(Ray ray, uvec3 indices) {
     Intersection intersection;
-    intersection.distance = MAX_DISTANCE;
+    
+    /*
+       v0  <- a   v1
+        +---------+
+         \       /
+     b |  \     /
+       v   \   /
+             +
+            v2
+    */
 
-    vec3 v0 = positions[indices.x];
-    vec3 v1 = positions[indices.y];
-    vec3 v2 = positions[indices.z];
+    vec3 v0 = positions[indices[0]];
+    vec3 v1 = positions[indices[1]];
+    vec3 v2 = positions[indices[2]];
 
-    vec3 edge1 = v1 - v0;
-    vec3 edge2 = v2 - v0;
-    vec3 h = cross(ray.direction, edge2);
-    float a = dot(edge1, h);
+    vec3 a = v0 - v1;
+    vec3 b = v2 - v0;
 
-    if (abs(a) < 1e-6) {
-        return intersection; // Parallel ray
-    }
+    vec3 normal = cross(b, a);
+    float determinant = dot(ray.direction, normal);
 
-    float f = 1.0 / a;
-    vec3 s = ray.origin - v0;
-    float u = f * dot(s, h);
-
-    if (u < 0.0 || u > 1.0) {
+    // ray is parallel to the triangle plane,
+    // they will never intersect
+    if (abs(determinant) < 1e-6) {
+        intersection.distance = MAX_DISTANCE;
         return intersection;
     }
 
-    vec3 q = cross(s, edge1);
-    float v = f * dot(ray.direction, q);
+    /*
+        Describing a point on the triangle using barycentric coordinates:
+        P = v0 + u * a + v * b
 
-    if (v < 0.0 || (u + v) > 1.0) {
+        find the intersection:
+        ray.origin + ray.direction * t = v0 + u * a + v * b
+
+        solve using cramer's rule
+    */
+
+    vec3 p = v0 - ray.origin;
+    vec3 q = cross(p, ray.direction);
+
+    float u = dot(q, b) / determinant;
+    float v = dot(q, a) / determinant;
+
+    // the ray intersects the triangle plane,
+    // but it doesn't hit the triangle itself
+    if (u < 0.0 || v < 0.0 || (u + v) > 1.0) {
+        intersection.distance = MAX_DISTANCE;
         return intersection;
     }
-
-    float t = f * dot(edge2, q);
-
-    if (t > 1e-6 && t < MAX_DISTANCE) {
-        intersection.coords = vec2(u, v);
-        intersection.distance = t;
-    }
+    
+    intersection.coords = vec2(u, v);
+    intersection.distance = dot(normal, p) / determinant;
 
     return intersection;
 }

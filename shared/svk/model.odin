@@ -1,7 +1,5 @@
 package svk
 
-// TODO: use one binding for all textures (probably)
-
 import "base:builtin"
 import "core:log"
 import "core:math/linalg"
@@ -209,29 +207,6 @@ load_primitive :: proc(
 ) {
 	options := cast(^Model_Loading_Options)context.user_ptr
 
-	primitive.vertex_buffers = make(map[Model_Attribute]Buffer, len(src_primitive.attributes))
-
-	for attribute in src_primitive.attributes {
-		attribute_type := transmute(Model_Attribute)attribute.type
-
-		if attribute_type not_in options.attributes {
-			continue
-		}
-
-		accessor := attribute.data
-		stride := accessor.stride > 0 ? accessor.stride : get_accessor_type_size(accessor.type)
-
-		primitive.vertex_buffers[attribute_type] = create_buffer(
-			ctx,
-			cast(vk.DeviceSize)stride,
-			cast(u32)accessor.count,
-			options.vertex_buffer_usage,
-			{.HOST_COHERENT, .DEVICE_LOCAL},
-		)
-
-		copy_accessor_data_to_buffer(ctx, accessor, &primitive.vertex_buffers[attribute_type])
-	}
-
 	accessor := src_primitive.indices
 	stride, type := get_index_size_and_vk_type(accessor.component_type)
 	primitive.index_type = type
@@ -248,6 +223,49 @@ load_primitive :: proc(
 
 	material_index := cgltf.material_index(data, src_primitive.material)
 	primitive.material = &model.materials[material_index]
+
+	// load existing attributes
+	for attribute in src_primitive.attributes {
+		attribute_type := transmute(Model_Attribute)attribute.type
+
+		if attribute_type not_in options.attributes {
+			log.infof("Skipping attribute %v", attribute_type)
+			continue
+		}
+
+		accessor = attribute.data
+		stride = accessor.stride > 0 ? accessor.stride : get_accessor_type_size(accessor.type)
+
+		primitive.vertex_buffers[attribute_type] = create_buffer(
+			ctx,
+			cast(vk.DeviceSize)stride,
+			cast(u32)accessor.count,
+			options.vertex_buffer_usage,
+			{.HOST_COHERENT, .DEVICE_LOCAL},
+		)
+
+		copy_accessor_data_to_buffer(ctx, accessor, &primitive.vertex_buffers[attribute_type])
+	}
+
+	// fill in missing attributes
+	for attribute_type in options.attributes {
+		if primitive.vertex_buffers[attribute_type] == {} {
+			can_be_filled := bit_set[Model_Attribute]{.normal, .tangent}
+			if attribute_type not_in can_be_filled {
+				log.panicf(
+					"Required attribute %v is missing and can't be filled in",
+					attribute_type,
+				)
+			}
+
+			log.warnf(
+				"Required attribute %v is missing, but don't worry my completely untested code is going to fill it in for you",
+				attribute_type,
+			)
+
+			fill_missing_attribute(ctx, &primitive, attribute_type)
+		}
+	}
 
 	return
 }
@@ -632,6 +650,81 @@ load_node :: proc(
 	}
 
 	return
+}
+
+@(private = "file")
+fill_missing_attribute :: proc(
+	ctx: Context,
+	primitive: ^Primitive,
+	attribute_type: Model_Attribute,
+) {
+	index_buffer := &primitive.index_buffer
+	map_buffer(ctx, index_buffer)
+
+	index_count := cast(int)index_buffer.count
+	indices := mem.slice_ptr(cast(^u32)index_buffer.mapped_memory, index_count)
+
+	positions_buffer := &primitive.vertex_buffers[.position]
+	map_buffer(ctx, positions_buffer)
+
+	vertex_count := cast(int)positions_buffer.count / 3
+	positions := mem.slice_ptr(cast(^[3]f32)positions_buffer.mapped_memory, vertex_count)
+
+	tex_coords_buffer := &primitive.vertex_buffers[.tex_coord]
+	map_buffer(ctx, tex_coords_buffer)
+
+	tex_coords := mem.slice_ptr(cast(^[2]f32)tex_coords_buffer.mapped_memory, vertex_count)
+
+	normals, tangents: [][3]f32
+
+	if attribute_type == .normal {
+		normals = make([][3]f32, vertex_count)
+	} else if attribute_type == .tangent {
+		tangents = make([][3]f32, vertex_count)
+	}
+
+	for i := 0; i < index_count; i += 3 {
+		first := indices[3 * i]
+		second := indices[3 * i + 1]
+		third := indices[3 * i + 2]
+
+		first_edge := positions[second] - positions[first]
+		second_edge := positions[third] - positions[first]
+
+		if attribute_type == .normal {
+			face_normal := linalg.cross(first_edge, second_edge)
+			face_normal = linalg.normalize(face_normal)
+
+			normals[first] += face_normal
+			normals[second] += face_normal
+			normals[third] += face_normal
+		} else if attribute_type == .tangent {
+			first_delta_uv := tex_coords[second] - tex_coords[first]
+			second_delta_uv := tex_coords[third] - tex_coords[first]
+
+			r :=
+				1.0 / (first_delta_uv.x * second_delta_uv.y - first_delta_uv.y * second_delta_uv.x)
+			face_tangent := (first_edge * second_delta_uv.y - second_edge * first_delta_uv.y) * r
+
+			tangents[first] += face_tangent
+			tangents[second] += face_tangent
+			tangents[third] += face_tangent
+		}
+	}
+
+	if attribute_type == .normal {
+		for &normal in normals {
+			normal = linalg.normalize(normal)
+		}
+	} else if attribute_type == .tangent {
+		for &tangent in tangents {
+			tangent = linalg.normalize(tangent)
+		}
+	}
+
+	unmap_buffer(ctx, tex_coords_buffer)
+	unmap_buffer(ctx, positions_buffer)
+	unmap_buffer(ctx, index_buffer)
 }
 
 // utility
