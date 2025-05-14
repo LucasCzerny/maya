@@ -92,28 +92,16 @@ create_render_data :: proc(ctx: svk.Context) -> Render_Data {
 	image_info.imageLayout = .SHADER_READ_ONLY_OPTIMAL
 	svk.update_descriptor_set(ctx, data.frame_descriptor, image_info, 0)
 
-	// boom_box, err := svk.load_model(ctx, "models/BoomBox.glb", attributes, texture_types)
-	// if err != nil {
-	// 	log.panicf("failed to load the boom box (err: %v)", err)
-	// }
-
-	// data.models[0] = boom_box
-
 	attributes :: bit_set[svk.Model_Attribute]{.position, .normal, .tangent, .tex_coord}
 	texture_types :: bit_set[svk.Model_Texture_Type]{.base_color}
 
-	cube, err := svk.load_model(
-		ctx,
-		"models/BoxTextured.glb",
-		attributes,
-		texture_types,
-		force_u32_indices = true,
-	)
+	boom_box, err := svk.load_model(ctx, "models/BoomBox.glb", attributes, texture_types)
 	if err != nil {
-		log.panicf("Failed to load the cube (err: %v)", err)
+		log.panicf("failed to load the boom box (err: %v)", err)
 	}
 
-	data.models[0] = cube
+	data.models[0] = boom_box
+
 	data.primitive_list = create_primitive_list(ctx, data.models)
 
 	update_scene_descriptor(ctx, data.scene_descriptor, data.primitive_list)

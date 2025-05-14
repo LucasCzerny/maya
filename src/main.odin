@@ -90,7 +90,7 @@ create_context :: proc() -> svk.Context {
 	}
 
 	device_config :: svk.Device_Config {
-		extensions = {"VK_KHR_swapchain"},
+		extensions = {"VK_KHR_swapchain", "VK_KHR_uniform_buffer_standard_layout"},
 		features = {samplerAnisotropy = true},
 	}
 

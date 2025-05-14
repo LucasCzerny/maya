@@ -6,6 +6,8 @@ import "core:slice"
 import "shared:svk"
 import vk "vendor:vulkan"
 
+_ :: log
+
 Primitive_List :: struct {
 	positions:  svk.Buffer,
 	normals:    svk.Buffer,
@@ -149,9 +151,6 @@ create_primitive_list :: proc(ctx: svk.Context, models: []svk.Model) -> (list: P
 	svk.copy_to_buffer(ctx, &list.tex_coords, raw_data(attributes.tex_coords))
 	svk.copy_to_buffer(ctx, &list.indices, raw_data(attributes.indices))
 
-	log.debug(attributes.positions)
-	log.debug(attributes.indices)
-
 	return
 }
 
@@ -187,6 +186,8 @@ add_primitive :: proc(ctx: svk.Context, primitive: svk.Primitive) {
 	a := cast(^Primitive_List_Attributes)context.user_ptr
 
 	// this is embarrassing
+	// i just saw this one week later and holy fuck.
+	// wdym *kind of* scuffed?
 	dst_slices := [5][]f32 {
 		slice.from_ptr(
 			cast(^f32)&a.positions[a.nr_vertices_loaded:][0],
