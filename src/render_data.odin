@@ -1,7 +1,7 @@
 package main
 
 import "core:log"
-// import "core:math/linalg"
+import "core:math/linalg"
 
 import vk "vendor:vulkan"
 
@@ -13,12 +13,11 @@ Render_Data :: struct {
 	frame_descriptor:         svk.Descriptor_Set,
 	compute_shader_sampler:   vk.Sampler,
 	//
-	scene_descriptor:         svk.Descriptor_Set,
-	models:                   []svk.Model,
-	primitive_list:           Primitive_List,
+	models:                   []Bounded_Model,
+	transforms:               []matrix[4, 4]f32,
 	//
-	quad_vertex_buffer:       svk.Buffer,
-	quad_index_buffer:        svk.Buffer,
+	box_vertex_buffer:        svk.Buffer,
+	box_index_buffer:         svk.Buffer,
 	//
 	camera:                   Camera,
 	camera_uniforms:          [MAX_FRAMES_IN_FLIGHT]svk.Uniform,
@@ -57,20 +56,20 @@ create_render_data :: proc(ctx: svk.Context) -> Render_Data {
 		frame_descriptor         = svk.create_descriptor_set(ctx, {frame_binding}),
 		compute_shader_sampler   = create_sampler(ctx),
 		//
-		scene_descriptor         = create_scene_descriptor(ctx),
-		models                   = make([]svk.Model, 1),
+		models                   = make([]Bounded_Model, 1),
+		transforms               = make([]matrix[4, 4]f32, 1),
 		//
-		quad_vertex_buffer       = svk.create_buffer(
+		box_vertex_buffer        = svk.create_buffer(
 			ctx,
-			size_of(f32),
-			4 * (2 + 2),
+			size_of([3]f32),
+			8,
 			{.VERTEX_BUFFER},
 			{.HOST_COHERENT, .DEVICE_LOCAL},
 		),
-		quad_index_buffer        = svk.create_buffer(
+		box_index_buffer         = svk.create_buffer(
 			ctx,
 			size_of(u32),
-			6,
+			36,
 			{.INDEX_BUFFER},
 			{.HOST_COHERENT, .DEVICE_LOCAL},
 		),
@@ -92,45 +91,47 @@ create_render_data :: proc(ctx: svk.Context) -> Render_Data {
 	image_info.imageLayout = .SHADER_READ_ONLY_OPTIMAL
 	svk.update_descriptor_set(ctx, data.frame_descriptor, image_info, 0)
 
-	// boom_box, err := svk.load_model(ctx, "models/BoomBox.glb", attributes, texture_types)
-	// if err != nil {
-	// 	log.panicf("failed to load the boom box (err: %v)", err)
-	// }
-
-	// data.models[0] = boom_box
-
 	attributes :: bit_set[svk.Model_Attribute]{.position, .normal, .tangent, .tex_coord}
 	texture_types :: bit_set[svk.Model_Texture_Type]{.base_color}
 
-	cube, err := svk.load_model(
-		ctx,
-		"models/BoxTextured.glb",
-		attributes,
-		texture_types,
-		force_u32_indices = true,
-	)
+	boom_box, err := svk.load_model(ctx, "models/BoomBox.glb", attributes, texture_types)
 	if err != nil {
-		log.panicf("Failed to load the cube (err: %v)", err)
+		log.panicf("failed to load the boom box (err: %v)", err)
 	}
 
-	data.models[0] = cube
-	data.primitive_list = create_primitive_list(ctx, data.models)
-
-	update_scene_descriptor(ctx, data.scene_descriptor, data.primitive_list)
+	data.models[0] = create_bounded_model(ctx, boom_box)
+	data.transforms[0] = linalg.matrix4_scale([3]f32{50, 50, 50})
 	
 	// odinfmt: disable
-	vertices := [4 * (2 + 2)]f32{
-		-1.0, -1.0, /**/ 0.0, 0.0,
-		 1.0, -1.0, /**/ 1.0, 0.0,
-		 1.0,  1.0, /**/ 1.0, 1.0,
-		-1.0,  1.0, /**/ 0.0, 1.0,
+	vertices := [8][3]f32 {
+		{-0.5, -0.5, -0.5},
+		{ 0.5, -0.5, -0.5},
+		{ 0.5,  0.5, -0.5},
+		{-0.5,  0.5, -0.5},
+		{-0.5, -0.5,  0.5},
+		{ 0.5, -0.5,  0.5},
+		{ 0.5,  0.5,  0.5},
+		{-0.5,  0.5,  0.5},
+	}
+
+	indices := [36]u32{
+		// front face
+		0, 1, 2, 2, 3, 0,
+		// right face
+		1, 5, 6, 6, 2, 1,
+		// back face
+		5, 4, 7, 7, 6, 5,
+		// left face
+		4, 0, 3, 3, 7, 4,
+		// top face
+		3, 2, 6, 6, 7, 3,
+		// bottom face
+		4, 5, 1, 1, 0, 4,
 	}
 	// odinfmt: enable
 
-	indices := [6]u32{0, 1, 2, 2, 3, 0}
-
-	svk.copy_to_buffer(ctx, &data.quad_vertex_buffer, raw_data(vertices[:]))
-	svk.copy_to_buffer(ctx, &data.quad_index_buffer, raw_data(indices[:]))
+	svk.copy_to_buffer(ctx, &data.box_vertex_buffer, raw_data(vertices[:]))
+	svk.copy_to_buffer(ctx, &data.box_index_buffer, raw_data(indices[:]))
 
 	data.camera = create_camera(ctx)
 

@@ -30,9 +30,7 @@ Model :: struct {
 }
 
 Scene :: struct {
-	nr_vertices: u32,
-	nr_indices:  u32,
-	root_nodes:  []^Node,
+	root_nodes: []^Node,
 }
 
 // some nodes are just for structure and don't have a mesh
@@ -44,9 +42,7 @@ Node :: struct {
 }
 
 Mesh :: struct {
-	nr_vertices: u32,
-	nr_indices:  u32,
-	primitives:  []Primitive,
+	primitives: []Primitive,
 }
 
 Primitive :: struct {
@@ -172,8 +168,6 @@ Model_Loading_Options :: struct {
 	texture_stage_flags:    vk.ShaderStageFlags,
 	anisotropy_enabled:     bool,
 	max_sampler_anisotropy: f32,
-	nr_vertices_scene:      u32,
-	nr_indices_scene:       u32,
 	force_u32:              bool,
 }
 
@@ -191,9 +185,6 @@ load_mesh :: proc(
 	for src_primitive, i in src_mesh.primitives {
 		primitive := &mesh.primitives[i]
 		primitive^ = load_primitive(ctx, model, data, src_primitive)
-
-		mesh.nr_vertices += primitive.vertex_buffers[.position].count
-		mesh.nr_indices += primitive.index_buffer.count
 	}
 
 	return mesh
@@ -587,18 +578,11 @@ create_default_sampler :: proc(ctx: Context) -> (sampler: vk.Sampler) {
 
 @(private = "file")
 load_scene :: proc(model: ^Model, data: ^cgltf.data, src_scene: cgltf.scene) -> (scene: Scene) {
-	options := cast(^Model_Loading_Options)context.user_ptr
-
 	scene.root_nodes = make([]^Node, len(src_scene.nodes))
-	options.nr_vertices_scene = 0
-	options.nr_indices_scene = 0
 
 	for root_node, i in src_scene.nodes {
 		scene.root_nodes[i] = load_node(model, data, root_node)
 	}
-
-	scene.nr_vertices = options.nr_vertices_scene
-	scene.nr_indices = options.nr_indices_scene
 
 	return scene
 }
@@ -612,8 +596,6 @@ load_node :: proc(
 ) -> (
 	node: ^Node,
 ) {
-	options := cast(^Model_Loading_Options)context.user_ptr
-
 	node_index := cgltf.node_index(data, src_node)
 	node = &model.nodes[node_index]
 
@@ -626,8 +608,6 @@ load_node :: proc(
 		mesh := &model.meshes[mesh_index]
 
 		node.mesh = mesh
-		options.nr_vertices_scene += mesh.nr_vertices
-		options.nr_indices_scene += mesh.nr_indices
 	}
 
 	node_transform: matrix[4, 4]f32 = 1
