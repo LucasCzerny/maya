@@ -29,8 +29,10 @@ begin_single_time_commands :: proc(ctx: Context) -> (command_buffer: vk.CommandB
 	return
 }
 
-end_single_time_commands :: proc(ctx: Context, command_buffer: ^vk.CommandBuffer) {
-	result := vk.EndCommandBuffer(command_buffer^)
+end_single_time_commands :: proc(ctx: Context, command_buffer: vk.CommandBuffer) {
+	command_buffer := command_buffer
+
+	result := vk.EndCommandBuffer(command_buffer)
 	if result != .SUCCESS {
 		log.panicf("Failed to end the single time command buffer (result: %v)", result)
 	}
@@ -38,12 +40,12 @@ end_single_time_commands :: proc(ctx: Context, command_buffer: ^vk.CommandBuffer
 	submit_info := vk.SubmitInfo {
 		sType              = .SUBMIT_INFO,
 		commandBufferCount = 1,
-		pCommandBuffers    = command_buffer,
+		pCommandBuffers    = &command_buffer,
 	}
 
 	vk.QueueSubmit(ctx.graphics_queue.handle, 1, &submit_info, vk.Fence{})
 	vk.QueueWaitIdle(ctx.graphics_queue.handle)
 
-	vk.FreeCommandBuffers(ctx.device, ctx.command_pool, 1, command_buffer)
+	vk.FreeCommandBuffers(ctx.device, ctx.command_pool, 1, &command_buffer)
 }
 

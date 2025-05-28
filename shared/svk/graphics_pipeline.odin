@@ -51,6 +51,7 @@ create_graphics_pipeline :: proc(
 		log.panicf("Failed to create the pipeline layout (result: %v)", result)
 	}
 
+	// TODO: use if instead?
 	log.ensure(
 		len(config.vertex_shader_source) != 0,
 		"You need to set the vertex shader source (use #load(\"path/to/shader\", []u32) f.e.)",

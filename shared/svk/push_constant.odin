@@ -1,3 +1,4 @@
+// TODO: remove this file
 package svk
 
 import vk "vendor:vulkan"

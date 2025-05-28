@@ -43,14 +43,6 @@ main :: proc() {
 	draw_ctx := svk.create_draw_context(ctx, MAX_FRAMES_IN_FLIGHT)
 	// defer svk.destroy_draw_context(ctx, draw_ctx)
 
-	data := create_render_data(ctx)
-	// defer destroy_render_data(ctx, data)
-
-	path_tracing_pipeline := create_path_tracing_pipeline(ctx, data)
-	post_processing_pipeline := create_post_processing_pipeline(ctx, data)
-
-	context.user_ptr = &data
-
 	last_time := glfw.GetTime()
 
 	for !glfw.WindowShouldClose(ctx.window.handle) {
@@ -60,9 +52,9 @@ main :: proc() {
 		delta_time := time - last_time
 		last_time = time
 
-		update_render_data(ctx, &data, draw_ctx.current_frame, delta_time)
+		log.info(delta_time)
 
-		svk.draw(&ctx, &draw_ctx, &path_tracing_pipeline, &post_processing_pipeline)
+		// svk.draw(&ctx, &draw_ctx, &path_tracing_pipeline)
 
 		glfw.SwapBuffers(ctx.window.handle)
 		glfw.PollEvents()
@@ -73,7 +65,7 @@ main :: proc() {
 
 create_context :: proc() -> svk.Context {
 	instance_config :: svk.Instance_Config {
-		name                     = "Model Example",
+		name                     = "maya",
 		major                    = 0,
 		minor                    = 1,
 		patch                    = 0,
@@ -82,7 +74,7 @@ create_context :: proc() -> svk.Context {
 	}
 
 	window_config :: svk.Window_Config {
-		window_title   = "Model Example",
+		window_title   = "maya",
 		initial_width  = 1280,
 		initial_height = 720,
 		resizable      = true,
@@ -90,7 +82,14 @@ create_context :: proc() -> svk.Context {
 	}
 
 	device_config :: svk.Device_Config {
-		extensions = {"VK_KHR_swapchain", "VK_KHR_uniform_buffer_standard_layout"},
+		extensions = {
+			"VK_KHR_swapchain",
+			"VK_KHR_acceleration_structure",
+			"VK_KHR_ray_tracing_pipeline",
+			"VK_KHR_deferred_host_operations",
+			"VK_KHR_buffer_device_address",
+			"VK_EXT_descriptor_indexing",
+		},
 		features = {samplerAnisotropy = true},
 	}
 

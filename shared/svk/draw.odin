@@ -96,6 +96,7 @@ draw :: proc(ctx: ^Context, draw_ctx: ^Draw_Context, pipelines: ..^Pipeline) {
 	if out_of_date {
 		update_swapchain_capabilities(ctx)
 		recreate_swapchain(ctx^, &ctx.swapchain)
+
 		for &pipeline in pipelines {
 			resize_pipeline(ctx^, pipeline)
 		}
@@ -163,7 +164,10 @@ draw :: proc(ctx: ^Context, draw_ctx: ^Draw_Context, pipelines: ..^Pipeline) {
 	if result == .SUBOPTIMAL_KHR {
 		update_swapchain_capabilities(ctx)
 		recreate_swapchain(ctx^, &ctx.swapchain)
-		for &pipeline in pipelines do resize_pipeline(ctx^, pipeline)
+
+		for &pipeline in pipelines {
+			resize_pipeline(ctx^, pipeline)
+		}
 	} else if result != .SUCCESS {
 		log.panicf("Failed to present the command buffer (result: %v)", result)
 	}

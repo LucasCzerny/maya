@@ -8,17 +8,26 @@ import "vendor:glfw"
 import "shared:svk"
 
 Camera :: struct {
-	position:  [3]f32,
-	p0:        f32,
-	direction: [3]f32,
-	p1:        f32,
-	right:     [3]f32,
-	p2:        f32,
-	up:        [3]f32,
+	position:          [3]f32,
+	direction:         [3]f32,
+	right:             [3]f32,
+	up:                [3]f32,
+	projection_matrix: matrix[4, 4]f32,
+	view_matrix:       matrix[4, 4]f32,
 }
 
-create_camera :: proc(ctx: svk.Context) -> Camera {
-	return Camera{[3]f32{0, 0, 1}, 0, [3]f32{0, 0, -1}, 0, [3]f32{1, 0, 0}, 0, [3]f32{0, 1, 0}}
+create_camera :: proc(ctx: svk.Context, width, height: f32) -> Camera {
+	camera := Camera {
+		position  = [3]f32{0, 0, 1},
+		direction = [3]f32{0, 0, -1},
+		right     = [3]f32{1, 0, 0},
+		up        = [3]f32{0, 1, 0},
+	}
+
+	camera.projection_matrix = calculate_projection_matrix(width, height)
+	camera.view_matrix = calculate_view_matrix(camera.position, camera.direction)
+
+	return camera
 }
 
 update_camera :: proc(ctx: svk.Context, camera: ^Camera, delta_time: f64) -> (changed: bool) {
@@ -38,18 +47,17 @@ update_camera :: proc(ctx: svk.Context, camera: ^Camera, delta_time: f64) -> (ch
 		delta_x := cursor_x - prev_cursor_x
 		delta_y := cursor_y - prev_cursor_y
 
-		yaw -= delta_x * sensitivity * delta_time
+		yaw += delta_x * sensitivity * delta_time
 
 		pitch -= delta_y * sensitivity * delta_time
-		pitch = min(pitch, math.PI / 2)
-		pitch = max(pitch, -math.PI / 2)
+		pitch = math.clamp(pitch, -math.PI / 2, math.PI / 2)
 
 		camera.direction.x = cast(f32)(math.cos(yaw) * math.cos(pitch))
 		camera.direction.y = cast(f32)math.sin(pitch)
 		camera.direction.z = cast(f32)(math.sin(yaw) * math.cos(pitch))
 
 		@(static) world_up := [3]f32{0, 1, 0}
-		camera.right = linalg.normalize(linalg.cross(world_up, camera.direction))
+		camera.right = linalg.normalize(linalg.cross(camera.direction, world_up))
 		camera.up = linalg.normalize(linalg.cross(camera.direction, camera.right))
 
 		changed = true
@@ -90,10 +98,25 @@ update_camera :: proc(ctx: svk.Context, camera: ^Camera, delta_time: f64) -> (ch
 
 	changed |= right_changed || up_changed || forward_changed
 
+	if !changed {
+		return
+	}
+
 	camera.position +=
 		(forward * camera.direction + right * camera.right + up * [3]f32{0, 1, 0}) *
 		cast(f32)(movement_speed * delta_time)
 
+	camera.view_matrix = calculate_view_matrix(camera.position, camera.direction)
+
 	return
+}
+
+calculate_projection_matrix :: proc(width: f32, height: f32) -> matrix[4, 4]f32 {
+	return linalg.matrix4_perspective_f32(45, width / height, 0.1, 1000)
+}
+
+@(private = "file")
+calculate_view_matrix :: proc(position, direction: [3]f32) -> matrix[4, 4]f32 {
+	return linalg.matrix4_look_at(position, position + direction, [3]f32{0, 1, 0})
 }
 

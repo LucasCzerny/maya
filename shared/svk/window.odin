@@ -14,10 +14,11 @@ Window_Config :: struct {
 }
 
 Window :: struct {
-	handle:  glfw.WindowHandle,
-	surface: vk.SurfaceKHR,
-	width:   u32,
-	height:  u32,
+	handle:       glfw.WindowHandle,
+	surface:      vk.SurfaceKHR,
+	width:        u32,
+	height:       u32,
+	just_resized: bool,
 }
 
 create_window :: proc(window: ^Window, config: Window_Config, instance: vk.Instance) {

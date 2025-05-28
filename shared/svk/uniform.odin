@@ -35,6 +35,14 @@ create_uniform :: proc(
 
 	uniform.stage_flags = stage_flags
 
+	buffer_info := vk.DescriptorBufferInfo {
+		buffer = uniform.buffer.handle,
+		offset = 0,
+		range  = uniform.buffer.size,
+	}
+
+	update_descriptor_set(ctx, uniform.descriptor, buffer_info, 0)
+
 	map_buffer(ctx, &uniform.buffer)
 
 	return
@@ -58,15 +66,12 @@ bind_uniform :: proc(
 	bind_descriptor_set(ctx, uniform.descriptor, command_buffer, layout, bind_point, first_set)
 }
 
-update_uniform :: proc(ctx: Context, uniform: ^Uniform, data: rawptr) {
-	copy_to_buffer(ctx, &uniform.buffer, data)
-
-	buffer_info := vk.DescriptorBufferInfo {
-		buffer = uniform.buffer.handle,
-		offset = 0,
-		range  = uniform.buffer.size,
-	}
-
-	update_descriptor_set(ctx, uniform.descriptor, buffer_info, 0)
+update_uniform_buffer :: proc(
+	ctx: Context,
+	uniform: ^Uniform,
+	data: rawptr,
+	loc := #caller_location,
+) {
+	copy_to_buffer(ctx, &uniform.buffer, data, loc)
 }
 
