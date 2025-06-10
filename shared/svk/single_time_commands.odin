@@ -4,6 +4,7 @@ import "core:log"
 
 import vk "vendor:vulkan"
 
+// TODO: handle results
 begin_single_time_commands :: proc(ctx: Context) -> (command_buffer: vk.CommandBuffer) {
 	alloc_info := vk.CommandBufferAllocateInfo {
 		sType              = .COMMAND_BUFFER_ALLOCATE_INFO,
@@ -48,4 +49,3 @@ end_single_time_commands :: proc(ctx: Context, command_buffer: vk.CommandBuffer)
 
 	vk.FreeCommandBuffers(ctx.device, ctx.command_pool, 1, &command_buffer)
 }
-
