@@ -17,6 +17,7 @@ Pipeline :: struct {
 		current_frame: u32,
 	),
 	//
+	// TODO: don't have render_pass and framebuffers here?
 	render_pass:  vk.RenderPass,
 	framebuffers: []vk.Framebuffer,
 	clear_color:  [3]f32,
@@ -26,9 +27,11 @@ Pipeline :: struct {
 Pipeline_Type :: enum {
 	graphics,
 	compute,
+	ray_tracing,
 }
 
-// the only function used by both graphics_pipeline.odin and compute_pipeline.odin lol
+// used by all pipeline types
+// TODO: use ctx instead of device?
 @(private)
 create_shader_module :: proc(source: []u32, device: vk.Device) -> (module: vk.ShaderModule) {
 	module_info := vk.ShaderModuleCreateInfo {
@@ -44,3 +47,4 @@ create_shader_module :: proc(source: []u32, device: vk.Device) -> (module: vk.Sh
 
 	return
 }
+

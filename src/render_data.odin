@@ -13,7 +13,11 @@ Render_Data :: struct {
 	blas:                   []Acceleration_Structure,
 	tlas:                   Acceleration_Structure,
 	//
+	storage_image:          svk.Image,
+	sampler:                vk.Sampler,
 	ray_tracing_descriptor: svk.Descriptor_Set,
+	//
+	ray_tracing_pipeline:   svk.Pipeline,
 }
 
 create_render_data :: proc(ctx: svk.Context) -> (data: Render_Data) {
@@ -41,9 +45,43 @@ create_render_data :: proc(ctx: svk.Context) -> (data: Render_Data) {
 		transform = linalg.matrix4_scale([3]f32{10, 10, 10}),
 	}
 
+	data.storage_image = svk.create_image(
+		ctx,
+		ctx.window.width,
+		ctx.window.height,
+		1,
+		3,
+		false,
+		layout = .GENERAL,
+	)
+	data.sampler = create_sampler(ctx)
 	data.tlas = create_top_level_acceleration_structure(ctx, data.model_instances)
 
-	data.ray_tracing_descriptor = create_ray_tracing_descriptor(ctx)
+	data.ray_tracing_descriptor = create_ray_tracing_descriptor(
+		ctx,
+		data.tlas,
+		data.storage_image,
+		data.sampler,
+		data.models[0].meshes[0].primitives[0].vertex_buffers[.position],
+	)
+
+	layout_info := vk.PipelineLayoutCreateInfo {
+		sType          = .PIPELINE_LAYOUT_CREATE_INFO,
+		setLayoutCount = 1,
+		pSetLayouts    = &data.ray_tracing_descriptor.layout,
+	}
+
+	pipeline_config := svk.Ray_Tracing_Pipeline_Config {
+		pipeline_layout_info         = layout_info,
+		ray_generation_shader_source = #load("../shaders/basic.rgen.spv", []u32),
+		miss_shader_source           = #load("../shaders/basic.miss.spv", []u32),
+		closest_hit_shader_source    = #load("../shaders/basic.rchit.spv", []u32),
+		max_ray_depth                = 1,
+		clear_color                  = {0.1, 0.1, 0.4},
+		record_fn                    = nil,
+	}
+
+	data.ray_tracing_pipeline = svk.create_ray_tracing_pipeline(ctx, pipeline_config)
 
 	return data
 }
@@ -60,3 +98,100 @@ destroy_render_data :: proc(ctx: svk.Context, data: Render_Data) {
 
 	destroy_acceleration_structure(ctx, data.tlas)
 }
+
+@(private = "file")
+create_sampler :: proc(ctx: svk.Context) -> (sampler: vk.Sampler) {
+	properties: vk.PhysicalDeviceProperties
+	vk.GetPhysicalDeviceProperties(ctx.physical_device, &properties)
+
+	create_info := vk.SamplerCreateInfo {
+		sType                   = .SAMPLER_CREATE_INFO,
+		magFilter               = .LINEAR,
+		minFilter               = .LINEAR,
+		mipmapMode              = .LINEAR,
+		addressModeU            = .CLAMP_TO_EDGE,
+		addressModeV            = .CLAMP_TO_EDGE,
+		addressModeW            = .CLAMP_TO_EDGE,
+		mipLodBias              = 0,
+		anisotropyEnable        = true,
+		maxAnisotropy           = properties.limits.maxSamplerAnisotropy,
+		compareEnable           = false,
+		compareOp               = .NEVER,
+		borderColor             = .INT_OPAQUE_BLACK,
+		unnormalizedCoordinates = false,
+	}
+
+	result := vk.CreateSampler(ctx.device, &create_info, nil, &sampler)
+	if result != .SUCCESS {
+		log.panicf("Failed to create the storage image sampler (result: %v)", result)
+	}
+
+	return sampler
+}
+
+@(private = "file")
+create_ray_tracing_descriptor :: proc(
+	ctx: svk.Context,
+	tlas: Acceleration_Structure,
+	storage_image: svk.Image,
+	sampler: vk.Sampler,
+	vertex_buffer: svk.Buffer,
+) -> svk.Descriptor_Set {
+	tlas := tlas
+
+	bindings: [3]vk.DescriptorSetLayoutBinding
+
+	bindings[0] = {
+		binding         = 0,
+		descriptorType  = .ACCELERATION_STRUCTURE_KHR,
+		descriptorCount = 1,
+		stageFlags      = {.RAYGEN_KHR},
+	}
+
+	bindings[1] = {
+		binding         = 1,
+		descriptorType  = .STORAGE_IMAGE,
+		descriptorCount = 1,
+		stageFlags      = {.RAYGEN_KHR},
+	}
+
+	bindings[2] = {
+		binding         = 2,
+		descriptorType  = .STORAGE_BUFFER,
+		descriptorCount = 1,
+		stageFlags      = {.CLOSEST_HIT_KHR},
+	}
+
+	descriptor := svk.create_descriptor_set(ctx, bindings[:])
+
+	tlas_buffer_info := vk.DescriptorBufferInfo {
+		buffer = tlas.buffer.handle,
+		range  = tlas.buffer.size,
+	}
+
+	tlas_write_info := vk.WriteDescriptorSetAccelerationStructureKHR {
+		sType                      = .WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
+		accelerationStructureCount = 1,
+		pAccelerationStructures    = &tlas.handle,
+	}
+
+	svk.update_descriptor_set(ctx, descriptor, tlas_buffer_info, 0, p_next = &tlas_write_info)
+
+	storage_image_info := vk.DescriptorImageInfo {
+		sampler     = sampler,
+		imageView   = storage_image.view,
+		imageLayout = storage_image.layout,
+	}
+
+	svk.update_descriptor_set_image(ctx, descriptor, storage_image_info, 1)
+
+	vertex_buffer_info := vk.DescriptorBufferInfo {
+		buffer = vertex_buffer.handle,
+		range  = vertex_buffer.size,
+	}
+
+	svk.update_descriptor_set_buffer(ctx, descriptor, vertex_buffer_info, 2, .STORAGE_BUFFER)
+
+	return descriptor
+}
+

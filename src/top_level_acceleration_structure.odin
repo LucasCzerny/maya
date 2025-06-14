@@ -18,6 +18,8 @@ create_top_level_acceleration_structure :: proc(
 			},
 			instanceCustomIndex = cast(u32)i,
 			mask = 0xFF,
+			// TODO: select with hit group to use
+			// instanceShaderBindingTableRecordOffset = ,
 			accelerationStructureReference = cast(u64)get_buffer_device_address(
 				ctx,
 				model.blas.buffer,
@@ -71,13 +73,12 @@ build_tlas :: proc(
 	nr_instances := nr_instances
 
 	build_info := vk.AccelerationStructureBuildGeometryInfoKHR {
-		sType = .ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
-		type = .TOP_LEVEL,
-		mode = .BUILD,
+		sType                    = .ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
+		type                     = .TOP_LEVEL,
+		mode                     = .BUILD,
 		dstAccelerationStructure = tlas,
-		geometryCount = 1,
-		pGeometries = &geometry,
-		scratchData = vk.DeviceOrHostAddressKHR{deviceAddress = scratch_buffer_address},
+		geometryCount            = 1,
+		pGeometries              = &geometry,
 	}
 
 	size_info := vk.AccelerationStructureBuildSizesInfoKHR {
@@ -121,6 +122,10 @@ build_tlas :: proc(
 		{.DEVICE_LOCAL},
 	)
 
+	build_info.scratchData = vk.DeviceOrHostAddressKHR {
+		deviceAddress = get_buffer_device_address(ctx, scratch_buffer),
+	}
+
 	build_range_info := vk.AccelerationStructureBuildRangeInfoKHR {
 		primitiveCount = nr_instances,
 	}
@@ -132,3 +137,4 @@ build_tlas :: proc(
 
 	return tlas, tlas_buffer
 }
+

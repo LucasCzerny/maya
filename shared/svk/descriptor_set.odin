@@ -69,11 +69,13 @@ update_descriptor_set_buffer :: proc(
 	buffer_info: vk.DescriptorBufferInfo,
 	binding: u32,
 	descriptor_type: vk.DescriptorType = .UNIFORM_BUFFER,
+	p_next: rawptr = nil,
 ) {
 	buffer_info := buffer_info
 
 	write_descriptor := vk.WriteDescriptorSet {
 		sType           = .WRITE_DESCRIPTOR_SET,
+		pNext           = p_next,
 		dstSet          = descriptor_set.set,
 		dstBinding      = binding,
 		descriptorCount = 1,
@@ -91,11 +93,13 @@ update_descriptor_set_image :: proc(
 	binding: u32,
 	array_element: u32 = 0,
 	descriptor_type: vk.DescriptorType = .COMBINED_IMAGE_SAMPLER,
+	p_next: rawptr = nil,
 ) {
 	image_info := image_info
 
 	write_descriptor := vk.WriteDescriptorSet {
 		sType           = .WRITE_DESCRIPTOR_SET,
+		pNext           = p_next,
 		dstSet          = descriptor_set.set,
 		dstBinding      = binding,
 		dstArrayElement = array_element,
