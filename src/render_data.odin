@@ -8,6 +8,9 @@ import "shared:svk"
 import vk "vendor:vulkan"
 
 Render_Data :: struct {
+	properties:             vk.PhysicalDeviceProperties2,
+	pipeline_properties:    vk.PhysicalDeviceRayTracingPipelinePropertiesKHR,
+	//
 	models:                 []svk.Model,
 	model_instances:        []Model_Instance,
 	blas:                   []Acceleration_Structure,
@@ -15,12 +18,20 @@ Render_Data :: struct {
 	//
 	storage_image:          svk.Image,
 	sampler:                vk.Sampler,
+	camera:                 Camera,
+	camera_buffer:          svk.Buffer,
 	ray_tracing_descriptor: svk.Descriptor_Set,
 	//
 	ray_tracing_pipeline:   svk.Pipeline,
+	shader_binding_table:   Shader_Binding_Table,
 }
 
 create_render_data :: proc(ctx: svk.Context) -> (data: Render_Data) {
+	// TODO: ctx.physical_device or all of it
+	data.properties, data.pipeline_properties = query_physical_device_properties(
+		ctx.physical_device,
+	)
+
 	boom_box, err := svk.load_model(
 		ctx,
 		"models/boom_box.glb",
@@ -54,8 +65,21 @@ create_render_data :: proc(ctx: svk.Context) -> (data: Render_Data) {
 		false,
 		layout = .GENERAL,
 	)
-	data.sampler = create_sampler(ctx)
 	data.tlas = create_top_level_acceleration_structure(ctx, data.model_instances)
+
+	data.sampler = create_sampler(ctx)
+
+	data.camera = create_camera(ctx, ctx.window.width, ctx.window.height)
+
+	data.camera_buffer = svk.create_buffer(
+		ctx,
+		size_of(Camera),
+		1,
+		{.UNIFORM_BUFFER},
+		{.HOST_VISIBLE, .HOST_COHERENT},
+	)
+
+	svk.copy_to_buffer(ctx, &data.camera_buffer, &data.camera)
 
 	data.ray_tracing_descriptor = create_ray_tracing_descriptor(
 		ctx,
@@ -83,20 +107,47 @@ create_render_data :: proc(ctx: svk.Context) -> (data: Render_Data) {
 
 	data.ray_tracing_pipeline = svk.create_ray_tracing_pipeline(ctx, pipeline_config)
 
+	data.shader_binding_table = create_shader_binding_table(
+		ctx,
+		data.ray_tracing_pipeline,
+		data.pipeline_properties,
+	)
+
 	return data
 }
 
 destroy_render_data :: proc(ctx: svk.Context, data: Render_Data) {
 	// TODO: i kinda need that lmao
-	for model in data.models {
-		// svk.destroy_model(ctx, model)
-	}
+	// for model in data.models {
+	// svk.destroy_model(ctx, model)
+	// }
 
 	for blas in data.blas {
 		destroy_acceleration_structure(ctx, blas)
 	}
 
 	destroy_acceleration_structure(ctx, data.tlas)
+}
+
+@(private = "file")
+query_physical_device_properties :: proc(
+	physical_device: vk.PhysicalDevice,
+) -> (
+	vk.PhysicalDeviceProperties2,
+	vk.PhysicalDeviceRayTracingPipelinePropertiesKHR,
+) {
+	ray_tracing_pipeline_properties := vk.PhysicalDeviceRayTracingPipelinePropertiesKHR {
+		sType = .PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR,
+	}
+
+	properties := vk.PhysicalDeviceProperties2 {
+		sType = .PHYSICAL_DEVICE_PROPERTIES_2,
+		pNext = &ray_tracing_pipeline_properties,
+	}
+
+	vk.GetPhysicalDeviceProperties2(physical_device, &properties)
+
+	return properties, ray_tracing_pipeline_properties
 }
 
 @(private = "file")
@@ -135,11 +186,12 @@ create_ray_tracing_descriptor :: proc(
 	tlas: Acceleration_Structure,
 	storage_image: svk.Image,
 	sampler: vk.Sampler,
+	camera_buffer: svk.Buffer,
 	vertex_buffer: svk.Buffer,
 ) -> svk.Descriptor_Set {
 	tlas := tlas
 
-	bindings: [3]vk.DescriptorSetLayoutBinding
+	bindings: [4]vk.DescriptorSetLayoutBinding
 
 	bindings[0] = {
 		binding         = 0,
@@ -157,6 +209,13 @@ create_ray_tracing_descriptor :: proc(
 
 	bindings[2] = {
 		binding         = 2,
+		descriptorType  = .UNIFORM_BUFFER,
+		descriptorCount = 1,
+		stageFlags      = {.RAYGEN_KHR},
+	}
+
+	bindings[3] = {
+		binding         = 3,
 		descriptorType  = .STORAGE_BUFFER,
 		descriptorCount = 1,
 		stageFlags      = {.CLOSEST_HIT_KHR},
@@ -185,12 +244,19 @@ create_ray_tracing_descriptor :: proc(
 
 	svk.update_descriptor_set_image(ctx, descriptor, storage_image_info, 1)
 
+	camera_buffer_info := vk.DescriptorBufferInfo {
+		buffer = camera_buffer.handle,
+		range  = camera_buffer.size,
+	}
+
+	svk.update_descriptor_set_buffer(ctx, descriptor, camera_buffer_info, 3, .STORAGE_BUFFER)
+
 	vertex_buffer_info := vk.DescriptorBufferInfo {
 		buffer = vertex_buffer.handle,
 		range  = vertex_buffer.size,
 	}
 
-	svk.update_descriptor_set_buffer(ctx, descriptor, vertex_buffer_info, 2, .STORAGE_BUFFER)
+	svk.update_descriptor_set_buffer(ctx, descriptor, vertex_buffer_info, 3, .STORAGE_BUFFER)
 
 	return descriptor
 }

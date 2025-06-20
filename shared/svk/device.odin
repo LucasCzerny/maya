@@ -5,8 +5,9 @@ import "core:log"
 import vk "vendor:vulkan"
 
 Device_Config :: struct {
-	extensions: []cstring,
-	features:   vk.PhysicalDeviceFeatures,
+	extensions:         []cstring,
+	features:           vk.PhysicalDeviceFeatures,
+	create_info_p_next: rawptr,
 }
 
 Swapchain_Support :: struct {
@@ -23,7 +24,7 @@ create_devices_and_queues :: proc(
 	surface: vk.SurfaceKHR,
 ) {
 	choose_physical_device_and_queues(ctx, config, instance, surface)
-	choose_logical_device(ctx, config)
+	choose_logical_device(ctx, config, config.create_info_p_next)
 
 	vk.GetDeviceQueue(ctx.device, ctx.graphics_queue.family, 0, &ctx.graphics_queue.handle)
 	vk.GetDeviceQueue(ctx.device, ctx.present_queue.family, 0, &ctx.present_queue.handle)
@@ -77,7 +78,7 @@ choose_physical_device_and_queues :: proc(
 }
 
 @(private = "file")
-choose_logical_device :: proc(ctx: ^Context, config: Device_Config) {
+choose_logical_device :: proc(ctx: ^Context, config: Device_Config, p_next: rawptr) {
 	features := config.features
 
 	// if the graphics_queue and present_queue are the same,
@@ -101,6 +102,7 @@ choose_logical_device :: proc(ctx: ^Context, config: Device_Config) {
 
 	device_info := vk.DeviceCreateInfo {
 		sType                   = .DEVICE_CREATE_INFO,
+		pNext                   = p_next,
 		queueCreateInfoCount    = u32(unique_queue_families),
 		pQueueCreateInfos       = raw_data(queue_create_infos[:]),
 		enabledExtensionCount   = cast(u32)len(config.extensions),

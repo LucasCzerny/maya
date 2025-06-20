@@ -1,7 +1,6 @@
 package main
 
 import "core:log"
-import "core:slice"
 
 import "shared:svk"
 
@@ -21,7 +20,7 @@ create_bottom_level_acceleration_structures :: proc(
 
 	nr_primitives := 0
 
-	for model, i in models {
+	for model, _ in models {
 		start := nr_primitives
 
 		for mesh in model.meshes {
@@ -74,7 +73,7 @@ create_bottom_level_acceleration_structures :: proc(
 	}
 
 	query_pool: vk.QueryPool
-	result := vk.CreateQueryPool(ctx.device, nil, nil, &query_pool)
+	result := vk.CreateQueryPool(ctx.device, &query_info, nil, &query_pool)
 	if result != nil {
 		log.panicf("Failed to create the query pool (%v)", result)
 	}
@@ -82,7 +81,6 @@ create_bottom_level_acceleration_structures :: proc(
 	// submitting everything at once could cause the pipeline to stall
 	MAX_BATCH_SIZE :: 256_000_000 // = 256MB
 
-	batch_size := 0
 	batch_start_index := 0
 
 	return_blas := make([]Acceleration_Structure, nr_blas)
@@ -124,16 +122,16 @@ create_bottom_level_acceleration_structures :: proc(
 		)
 		svk.end_single_time_commands(ctx, command_buffer)
 
-		for i in batch_start_index ..= i {
-			batch_index := i - batch_start_index
+		for j in batch_start_index ..= i {
+			batch_index := j - batch_start_index
 
 			// goodbye my lover, goodbye my friend
-			vk.DestroyAccelerationStructureKHR(ctx.device, blas[i], nil)
-			svk.destroy_buffer(ctx, blas_buffers[i])
+			vk.DestroyAccelerationStructureKHR(ctx.device, blas[j], nil)
+			svk.destroy_buffer(ctx, blas_buffers[j])
 
 			return_blas[i] = {
-				handle = blas[batch_index],
-				buffer = blas_buffers[batch_index],
+				handle = compacted_blas[batch_index],
+				buffer = compacted_blas_buffers[batch_index],
 			}
 		}
 
@@ -263,8 +261,8 @@ build_blas_batched :: proc(
 
 	for &blas, i in blas_batch {
 		build_ranges := make([]vk.AccelerationStructureBuildRangeInfoKHR, len(primitive_counts))
-		for count, i in primitive_counts {
-			build_ranges[i] = {
+		for count, j in primitive_counts {
+			build_ranges[j] = {
 				primitiveCount = count,
 			}
 		}
@@ -397,3 +395,4 @@ get_blas_device_address :: proc(
 
 	return vk.GetAccelerationStructureDeviceAddressKHR(ctx.device, &address_info)
 }
+

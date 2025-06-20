@@ -267,7 +267,7 @@ transition_image :: proc(
 	)
 
 	if use_single_time_commands {
-		end_single_time_commands(ctx, &command_buffer)
+		end_single_time_commands(ctx, command_buffer)
 	}
 }
 
@@ -310,6 +310,6 @@ copy_from_staging_buffer :: proc(ctx: Context, image: Image, buffer: Buffer) {
 		&region,
 	)
 
-	end_single_time_commands(ctx, &command_buffer)
+	end_single_time_commands(ctx, command_buffer)
 }
 

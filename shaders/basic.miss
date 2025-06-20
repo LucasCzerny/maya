@@ -1,0 +1,7 @@
+#version 450
+
+layout(location = 0) rayPayloadInEXT hitPayload prd;
+
+void main() {
+    prd.hitValue = vec3(0.1, 0.3, 0.6);
+}

@@ -3,9 +3,10 @@ package main
 import "core:log"
 import "core:mem"
 
-import "vendor:glfw"
-
 import "shared:svk"
+
+import "vendor:glfw"
+import vk "vendor:vulkan"
 
 MAX_FRAMES_IN_FLIGHT :: 2
 
@@ -43,6 +44,8 @@ main :: proc() {
 	draw_ctx := svk.create_draw_context(ctx, MAX_FRAMES_IN_FLIGHT)
 	// defer svk.destroy_draw_context(ctx, draw_ctx)
 
+	data := create_render_data(ctx)
+
 	last_time := glfw.GetTime()
 
 	for !glfw.WindowShouldClose(ctx.window.handle) {
@@ -54,7 +57,12 @@ main :: proc() {
 
 		log.info(delta_time)
 
-		// svk.draw(&ctx, &draw_ctx, &path_tracing_pipeline)
+		changed := update_camera(ctx, &data.camera, delta_time)
+		if changed {
+			svk.copy_to_buffer(ctx, &data.camera_buffer, &data.camera)
+		}
+
+		svk.draw(&ctx, &draw_ctx, &data.ray_tracing_pipeline)
 
 		glfw.SwapBuffers(ctx.window.handle)
 		glfw.PollEvents()
@@ -81,16 +89,30 @@ create_context :: proc() -> svk.Context {
 		fullscreen     = false,
 	}
 
-	device_config :: svk.Device_Config {
+	acceleration_structure_features := vk.PhysicalDeviceAccelerationStructureFeaturesKHR {
+		sType                 = .PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR,
+		accelerationStructure = true,
+	}
+
+	ray_tracing_pipeline_features := vk.PhysicalDeviceRayTracingPipelineFeaturesKHR {
+		sType              = .PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
+		pNext              = &acceleration_structure_features,
+		rayTracingPipeline = true,
+	}
+
+	device_config := svk.Device_Config {
 		extensions = {
+			// TODO: no way this isn't in core yet
 			"VK_KHR_swapchain",
+			// for ray tracing
 			"VK_KHR_acceleration_structure",
 			"VK_KHR_ray_tracing_pipeline",
 			"VK_KHR_deferred_host_operations",
 			"VK_KHR_buffer_device_address",
-			"VK_EXT_descriptor_indexing",
+			// "VK_EXT_descriptor_indexing",
 		},
 		features = {samplerAnisotropy = true},
+		create_info_p_next = &ray_tracing_pipeline_features,
 	}
 
 	swapchain_config :: svk.Swapchain_Config {

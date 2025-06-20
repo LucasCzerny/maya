@@ -1,0 +1,49 @@
+#version 450
+
+layout(location = 0) rayPayloadEXT hitPayload prd;
+
+layout(set = 0, binding = 0) uniform accelerationStructureEXT tlas;
+
+layout(set = 0, binding = 1) uniform image2D
+
+layout(set = 0, binding = 2) uniform Camera {
+    mat4 view;
+    mat4 projection;
+    mat4 view_inverse;
+    mat4 projection_inverse;
+} camera;
+
+void main() {
+    const vec2 image_size = gl_LaunchSizeEXT.xy;
+    const vec2 pixel_start = gl_LaunchIDEXT.xy;
+    const vec2 pixel_center = pixel_start + vec2(0.5); // (0, 0) -> (1920, 1080)
+
+    const vec2 uv = pixel_center / image_size; // [0, 1]
+    uv = uv * 2.0 - 1.0; // [-1, 1]
+
+    const vec4 origin = camera.view_inverse * vec4(0.0, 0.0, 0.0, 1.0);
+    const vec4 target = camera.proj_inverse * vec4(d.x, d.y, 1.0, 1.0);
+    const vec4 direction = camera.view_inverse * vec4(normalize(target.xyz), 0.0);
+
+    const float t_min = 0.0001;
+    const float t_max = 1000.0;
+
+    // same as in blas
+    uint flags = gl_RayFlagsOpaqueEXT;
+
+    traceRayEXT(
+        tlas,
+        flags,
+        0xFF,
+        0,
+        0,
+        0,
+        origin.xyz,
+        tMin,
+        direction.xyz,
+        tMax,
+        0               
+    );
+
+    imageStore(storage_image, pixel_start, vec4(prd.hitValue, 1.0));
+}

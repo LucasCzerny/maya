@@ -146,8 +146,8 @@ create_ray_tracing_pipeline :: proc(
 
 	result = vk.CreateRayTracingPipelinesKHR(
 		ctx.device,
-		nil,
-		nil,
+		{},
+		{},
 		1,
 		&pipeline_info,
 		nil,
